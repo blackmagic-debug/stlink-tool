@@ -460,8 +460,8 @@ int stlink_flash(struct STLinkInfo *info, const char *filename) {
 	uint32_t address = base_offset + flashed_bytes;
 	uint32_t sector_start[8] = {0x08000000, 0x08004000, 0x08008000, 0x0800C000,
 				    0x08010000, 0x08020000, 0x08040000, 0x08060000};
-	int sector;
-	int i;
+	int sector = -1;
+	size_t i;
 	for (i = 0; i < 8; i++) {
 	    if (sector_start[i] == address) {
 		sector = i;
