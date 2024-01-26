@@ -176,9 +176,9 @@ bool stlink_read_info(stlink_info_s *info)
 	memcpy(info->firmware_key, data, 4);
 	memcpy(info->firmware_key + 4, data + 8, 12);
 	if (info->stlink_version < 3)
-		my_encrypt((unsigned char *)"I am key, wawawa", info->firmware_key, 16);
+		stlink_aes((unsigned char *)"I am key, wawawa", info->firmware_key, 16);
 	else
-		my_encrypt((unsigned char *)" found...STlink ", info->firmware_key, 16);
+		stlink_aes((unsigned char *)" found...STlink ", info->firmware_key, 16);
 	return true;
 }
 
@@ -216,7 +216,7 @@ uint16_t stlink_checksum(const uint8_t *const firmware, const size_t len)
 int stlink_dfu_download(stlink_info_s *info, unsigned char *data, const size_t data_len, const uint16_t wBlockNum)
 {
 	if (wBlockNum >= 2 && info->stlink_version == 3)
-		my_encrypt((uint8_t *)" .ST-Link.ver.3.", data, data_len);
+		stlink_aes((uint8_t *)" .ST-Link.ver.3.", data, data_len);
 
 	uint8_t download_request[16] = {
 		ST_DFU_MAGIC,
@@ -227,7 +227,7 @@ int stlink_dfu_download(stlink_info_s *info, unsigned char *data, const size_t d
 	write_le2(download_request, 6, data_len);                        /* wLength */
 
 	if (wBlockNum >= 2)
-		my_encrypt(info->firmware_key, data, data_len);
+		stlink_aes(info->firmware_key, data, data_len);
 
 	int rw_bytes = 0;
 	int res = libusb_bulk_transfer(info->stinfo_dev_handle, info->stinfo_ep_out, download_request,

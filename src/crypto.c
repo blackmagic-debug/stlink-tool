@@ -1,5 +1,7 @@
 /*
  * Copyright (c) 2018 Jean THOMAS.
+ * Copyright (c) 2024 1BitSquared <info@1bitsquared.com>
+ * Modified by Rachel Mant <git@dragonmux.network>
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the "Software"),
@@ -37,7 +39,7 @@ static void convert_to_big_endian(unsigned char *array, unsigned int length)
 	}
 }
 
-void my_encrypt(unsigned char *key, unsigned char *data, unsigned int length)
+void stlink_aes(const void *const key, uint8_t *const data, const size_t length)
 {
 	struct AES_ctx ctx;
 	unsigned char key_be[16];
