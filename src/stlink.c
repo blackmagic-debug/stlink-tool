@@ -58,6 +58,31 @@ static int stlink_erase(stlink_info_s *info, uint32_t address);
 static int stlink_set_address(stlink_info_s *info, uint32_t address);
 static bool stlink_dfu_status(stlink_info_s *info, dfu_status_s *status);
 
+static inline void write_le2(uint8_t *const buffer, const size_t offset, const uint16_t value)
+{
+	buffer[offset + 0U] = value & 0xffU;
+	buffer[offset + 1U] = (value >> 8U) & 0xffU;
+}
+
+static inline void write_le4(uint8_t *const buffer, const size_t offset, const uint32_t value)
+{
+	buffer[offset + 0U] = value & 0xffU;
+	buffer[offset + 1U] = (value >> 8U) & 0xffU;
+	buffer[offset + 2U] = (value >> 16U) & 0xffU;
+	buffer[offset + 3U] = (value >> 24U) & 0xffU;
+}
+
+static inline uint16_t read_le2(const uint8_t *const buffer, const size_t offset)
+{
+	return buffer[offset + 0U] | ((uint16_t)buffer[offset + 1U] << 8U);
+}
+
+static inline uint32_t read_le4(const uint8_t *const buffer, const size_t offset)
+{
+	return buffer[offset + 0U] | ((uint32_t)buffer[offset + 1U] << 8U) | ((uint32_t)buffer[offset + 2U] << 16U) |
+		((uint32_t)buffer[offset + 3U] << 24U);
+}
+
 int stlink_dfu_mode(libusb_device_handle *dev_handle, int trigger)
 {
 	unsigned char data[16];
@@ -216,27 +241,23 @@ uint16_t stlink_checksum(const unsigned char *firmware, size_t len)
 
 int stlink_dfu_download(stlink_info_s *info, unsigned char *data, const size_t data_len, const uint16_t wBlockNum)
 {
-	unsigned char download_request[16];
-	dfu_status_s dfu_status;
-	int rw_bytes, res;
-	memset(download_request, 0, sizeof(download_request));
-
-	if (wBlockNum >= 2 && info->stlink_version == 3) {
+	if (wBlockNum >= 2 && info->stlink_version == 3)
 		my_encrypt((uint8_t *)" .ST-Link.ver.3.", data, data_len);
-	}
 
-	download_request[0] = ST_DFU_MAGIC;
-	download_request[1] = DFU_DNLOAD;
-	*(uint16_t *)(download_request + 2) = wBlockNum;                       /* wValue */
-	*(uint16_t *)(download_request + 4) = stlink_checksum(data, data_len); /* wIndex */
-	*(uint16_t *)(download_request + 6) = data_len;                        /* wLength */
+	uint8_t download_request[16] = {
+		ST_DFU_MAGIC,
+		DFU_DNLOAD,
+	};
+	write_le2(download_request, 2, wBlockNum);                       /* wValue */
+	write_le2(download_request, 4, stlink_checksum(data, data_len)); /* wIndex */
+	write_le2(download_request, 6, data_len);                        /* wLength */
 
-	if (wBlockNum >= 2) {
+	if (wBlockNum >= 2)
 		my_encrypt(info->firmware_key, data, data_len);
-	}
 
-	res = libusb_bulk_transfer(info->stinfo_dev_handle, info->stinfo_ep_out, download_request, sizeof(download_request),
-		&rw_bytes, USB_TIMEOUT);
+	int rw_bytes = 0;
+	int res = libusb_bulk_transfer(info->stinfo_dev_handle, info->stinfo_ep_out, download_request,
+		sizeof(download_request), &rw_bytes, USB_TIMEOUT);
 	if (res || rw_bytes != sizeof(download_request)) {
 		fprintf(stderr, "USB transfer failure\n");
 		return -1;
@@ -247,6 +268,7 @@ int stlink_dfu_download(stlink_info_s *info, unsigned char *data, const size_t d
 		return -1;
 	}
 
+	dfu_status_s dfu_status;
 	if (!stlink_dfu_status(info, &dfu_status))
 		return -1;
 
@@ -310,13 +332,8 @@ bool stlink_dfu_status(stlink_info_s *const info, dfu_status_s *const status)
 
 int stlink_erase(stlink_info_s *const info, const uint32_t address)
 {
-	uint8_t command[5] = {
-		ERASE_COMMAND,
-		address & 0xffU,
-		(address >> 8) & 0xffU,
-		(address >> 16) & 0xffU,
-		(address >> 24) & 0xffU,
-	};
+	uint8_t command[5] = {ERASE_COMMAND};
+	write_le4(command, 1, address);
 	return stlink_dfu_download(info, command, sizeof(command), 0);
 }
 
@@ -331,14 +348,9 @@ int stlink_sector_erase(stlink_info_s *const info, const uint32_t sector)
 
 int stlink_set_address(stlink_info_s *const info, const uint32_t address)
 {
-	uint8_t set_address_command[5] = {
-		SET_ADDRESS_POINTER_COMMAND,
-		address & 0xffU,
-		(address >> 8) & 0xffU,
-		(address >> 16) & 0xffU,
-		(address >> 24) & 0xffU,
-	};
-	return stlink_dfu_download(info, set_address_command, sizeof(set_address_command), 0);
+	uint8_t command[5] = {SET_ADDRESS_POINTER_COMMAND};
+	write_le4(command, 1, address);
+	return stlink_dfu_download(info, command, sizeof(command), 0);
 }
 
 int stlink_flash(stlink_info_s *info, const char *filename)
