@@ -46,6 +46,7 @@
 
 #include "crypto.h"
 #include "stlink.h"
+#include "buffer_utils.h"
 
 #define USB_TIMEOUT 5000U
 
@@ -69,36 +70,6 @@
 static int stlink_erase(stlink_info_s *info, uint32_t address);
 static int stlink_set_address(stlink_info_s *info, uint32_t address);
 static bool stlink_dfu_status(stlink_info_s *info, dfu_status_s *status);
-
-static inline void write_le2(uint8_t *const buffer, const size_t offset, const uint16_t value)
-{
-	buffer[offset + 0U] = value & 0xffU;
-	buffer[offset + 1U] = (value >> 8U) & 0xffU;
-}
-
-static inline void write_le4(uint8_t *const buffer, const size_t offset, const uint32_t value)
-{
-	buffer[offset + 0U] = value & 0xffU;
-	buffer[offset + 1U] = (value >> 8U) & 0xffU;
-	buffer[offset + 2U] = (value >> 16U) & 0xffU;
-	buffer[offset + 3U] = (value >> 24U) & 0xffU;
-}
-
-static inline uint16_t read_le2(const uint8_t *const buffer, const size_t offset)
-{
-	return buffer[offset + 0U] | ((uint16_t)buffer[offset + 1U] << 8U);
-}
-
-static inline uint16_t read_be2(const uint8_t *const buffer, const size_t offset)
-{
-	return ((uint16_t)buffer[offset + 0U] << 8U) | buffer[offset + 1U];
-}
-
-static inline uint32_t read_le4(const uint8_t *const buffer, const size_t offset)
-{
-	return buffer[offset + 0U] | ((uint32_t)buffer[offset + 1U] << 8U) | ((uint32_t)buffer[offset + 2U] << 16U) |
-		((uint32_t)buffer[offset + 3U] << 24U);
-}
 
 uint16_t stlink_dfu_mode(libusb_device_handle *const dev_handle, const bool trigger)
 {
