@@ -52,12 +52,12 @@ enum DeviceState {
 	dfuERROR = 10
 };
 
-enum BlTypes {
-	STLINK_BL_V2 = 0,
+typedef enum bootloader_types {
+	STLINK_BL_V2,
 	STLINK_BL_V3
-};
+} bootloader_types_e;
 
-struct STLinkInfo {
+typedef struct stlink_info {
 	uint8_t firmware_key[16];
 	uint8_t id[12];
 	uint8_t stlink_version;
@@ -66,22 +66,21 @@ struct STLinkInfo {
 	uint16_t loader_version;
 	libusb_context *stinfo_usb_ctx;
 	libusb_device_handle *stinfo_dev_handle;
-	unsigned char stinfo_ep_in;
-	unsigned char stinfo_ep_out;
-	enum BlTypes stinfo_bl_type;
-};
+	uint8_t stinfo_ep_in;
+	uint8_t stinfo_ep_out;
+	bootloader_types_e stinfo_bl_type;
+} stlink_info_s;
 
-struct DFUStatus {
-	enum DeviceStatus bStatus : 8;
-	unsigned int bwPollTimeout : 24;
-	enum DeviceState bState : 8;
-	unsigned char iString : 8;
-};
+typedef struct dfu_status {
+	enum DeviceStatus bStatus;
+	enum DeviceState bState;
+	uint8_t iString;
+	uint32_t bwPollTimeout;
+} dfu_status_s;
 
 int stlink_dfu_mode(libusb_device_handle *dev_handle, int trigger);
-int stlink_read_info(struct STLinkInfo *info);
-int stlink_current_mode(struct STLinkInfo *info);
-int stlink_dfu_download(
-	struct STLinkInfo *stlink_info, unsigned char *data, const size_t data_len, const uint16_t wBlockNum);
-int stlink_flash(struct STLinkInfo *stlink_info, const char *filename);
-int stlink_exit_dfu(struct STLinkInfo *info);
+int stlink_read_info(stlink_info_s *info);
+int stlink_current_mode(stlink_info_s *info);
+int stlink_dfu_download(stlink_info_s *stlink_info, uint8_t *data, size_t data_len, uint16_t wBlockNum);
+int stlink_flash(stlink_info_s *stlink_info, const char *filename);
+int stlink_exit_dfu(stlink_info_s *info);

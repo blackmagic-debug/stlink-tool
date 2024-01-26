@@ -51,7 +51,7 @@ void print_help(char *argv[])
 
 int main(int argc, char *argv[])
 {
-	struct STLinkInfo info;
+	stlink_info_s info;
 	int res = EXIT_FAILURE, i, opt, probe = 0;
 
 	while ((opt = getopt(argc, argv, "hp")) != -1) {

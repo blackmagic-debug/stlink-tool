@@ -19,6 +19,9 @@
  * OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
+#include <stdint.h>
+#include <stddef.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <fcntl.h>
@@ -32,28 +35,28 @@
 #include "crypto.h"
 #include "stlink.h"
 
-#define USB_TIMEOUT 5000
+#define USB_TIMEOUT 5000U
 
-#define DFU_DETACH    0x00
-#define DFU_DNLOAD    0x01
-#define DFU_UPLOAD    0x02
-#define DFU_GETSTATUS 0x03
-#define DFU_CLRSTATUS 0x04
-#define DFU_GETSTATE  0x05
-#define DFU_ABORT     0x06
-#define DFU_EXIT      0x07
-#define ST_DFU_INFO   0xF1
-#define ST_DFU_MAGIC  0xF3
+#define DFU_DETACH    0x00U
+#define DFU_DNLOAD    0x01U
+#define DFU_UPLOAD    0x02U
+#define DFU_GETSTATUS 0x03U
+#define DFU_CLRSTATUS 0x04U
+#define DFU_GETSTATE  0x05U
+#define DFU_ABORT     0x06U
+#define DFU_EXIT      0x07U
+#define ST_DFU_INFO   0xF1U
+#define ST_DFU_MAGIC  0xF3U
 
-#define GET_COMMAND                 0x00
-#define SET_ADDRESS_POINTER_COMMAND 0x21
-#define ERASE_COMMAND               0x41
-#define ERASE_SECTOR_COMMAND        0x42
-#define READ_UNPROTECT_COMMAND      0x92
+#define GET_COMMAND                 0x00U
+#define SET_ADDRESS_POINTER_COMMAND 0x21U
+#define ERASE_COMMAND               0x41U
+#define ERASE_SECTOR_COMMAND        0x42U
+#define READ_UNPROTECT_COMMAND      0x92U
 
-static int stlink_erase(struct STLinkInfo *info, uint32_t address);
-static int stlink_set_address(struct STLinkInfo *info, uint32_t address);
-static int stlink_dfu_status(struct STLinkInfo *info, struct DFUStatus *status);
+static int stlink_erase(stlink_info_s *info, uint32_t address);
+static int stlink_set_address(stlink_info_s *info, uint32_t address);
+static bool stlink_dfu_status(stlink_info_s *info, dfu_status_s *status);
 
 int stlink_dfu_mode(libusb_device_handle *dev_handle, int trigger)
 {
@@ -82,7 +85,7 @@ int stlink_dfu_mode(libusb_device_handle *dev_handle, int trigger)
 	return data[0] << 8 | data[1];
 }
 
-int stlink_read_info(struct STLinkInfo *info)
+int stlink_read_info(stlink_info_s *info)
 {
 	unsigned char data[20];
 	int res, rw_bytes;
@@ -172,7 +175,7 @@ int stlink_read_info(struct STLinkInfo *info)
 	return 0;
 }
 
-int stlink_current_mode(struct STLinkInfo *info)
+int stlink_current_mode(stlink_info_s *info)
 {
 	unsigned char data[16];
 	int rw_bytes, res;
@@ -211,10 +214,10 @@ uint16_t stlink_checksum(const unsigned char *firmware, size_t len)
 	return (uint16_t)ret & 0xFFFF;
 }
 
-int stlink_dfu_download(struct STLinkInfo *info, unsigned char *data, const size_t data_len, const uint16_t wBlockNum)
+int stlink_dfu_download(stlink_info_s *info, unsigned char *data, const size_t data_len, const uint16_t wBlockNum)
 {
 	unsigned char download_request[16];
-	struct DFUStatus dfu_status;
+	dfu_status_s dfu_status;
 	int rw_bytes, res;
 	memset(download_request, 0, sizeof(download_request));
 
@@ -244,9 +247,8 @@ int stlink_dfu_download(struct STLinkInfo *info, unsigned char *data, const size
 		return -1;
 	}
 
-	if (stlink_dfu_status(info, &dfu_status)) {
+	if (!stlink_dfu_status(info, &dfu_status))
 		return -1;
-	}
 
 	if (dfu_status.bState != dfuDNBUSY) {
 		fprintf(stderr, "Unexpected DFU state : %d\n", dfu_status.bState);
@@ -260,9 +262,8 @@ int stlink_dfu_download(struct STLinkInfo *info, unsigned char *data, const size
 
 	usleep(dfu_status.bwPollTimeout * 1000);
 
-	if (stlink_dfu_status(info, &dfu_status)) {
+	if (!stlink_dfu_status(info, &dfu_status))
 		return -1;
-	}
 
 	if (dfu_status.bState != dfuDNLOAD_IDLE) {
 		if (dfu_status.bStatus == errVENDOR) {
@@ -280,84 +281,67 @@ int stlink_dfu_download(struct STLinkInfo *info, unsigned char *data, const size
 	return 0;
 }
 
-int stlink_dfu_status(struct STLinkInfo *info, struct DFUStatus *status)
+bool stlink_dfu_status(stlink_info_s *const info, dfu_status_s *const status)
 {
-	unsigned char data[16];
-	int rw_bytes, res;
-
-	memset(data, 0, sizeof(data));
-
-	data[0] = ST_DFU_MAGIC;
-	data[1] = DFU_GETSTATUS;
+	uint8_t data[16] = {
+		ST_DFU_MAGIC,
+		DFU_GETSTATUS,
+	};
 	data[6] = 0x06; /* wLength */
 
-	res = libusb_bulk_transfer(info->stinfo_dev_handle, info->stinfo_ep_out, data, 16, &rw_bytes, USB_TIMEOUT);
+	int rw_bytes = 0;
+	int res = libusb_bulk_transfer(info->stinfo_dev_handle, info->stinfo_ep_out, data, 16, &rw_bytes, USB_TIMEOUT);
 	if (res || rw_bytes != 16) {
 		fprintf(stderr, "USB transfer failure\n");
-		return -1;
+		return false;
 	}
 	res = libusb_bulk_transfer(info->stinfo_dev_handle, info->stinfo_ep_in, data, 6, &rw_bytes, USB_TIMEOUT);
 	if (res || rw_bytes != 6) {
 		fprintf(stderr, "USB transfer failure\n");
-		return -1;
+		return false;
 	}
 
 	status->bStatus = data[0];
-	status->bwPollTimeout = data[1] | data[2] << 8 | data[3] << 16;
+	status->bwPollTimeout = data[1] | ((uint32_t)data[2] << 8U) | ((uint32_t)data[3] << 16U);
 	status->bState = data[4];
 	status->iString = data[5];
-
-	return 0;
+	return true;
 }
 
-int stlink_erase(struct STLinkInfo *info, uint32_t address)
+int stlink_erase(stlink_info_s *const info, const uint32_t address)
 {
-	unsigned char command[5];
-	int res;
-
-	command[0] = ERASE_COMMAND;
-	command[1] = address & 0xFF;
-	command[2] = (address >> 8) & 0xFF;
-	command[3] = (address >> 16) & 0xFF;
-	command[4] = (address >> 24) & 0xFF;
-
-	res = stlink_dfu_download(info, command, sizeof(command), 0);
-
-	return res;
+	uint8_t command[5] = {
+		ERASE_COMMAND,
+		address & 0xffU,
+		(address >> 8) & 0xffU,
+		(address >> 16) & 0xffU,
+		(address >> 24) & 0xffU,
+	};
+	return stlink_dfu_download(info, command, sizeof(command), 0);
 }
 
-int stlink_sector_erase(struct STLinkInfo *info, uint32_t sector)
+int stlink_sector_erase(stlink_info_s *const info, const uint32_t sector)
 {
-	unsigned char command[5];
-	int res;
-
-	command[0] = ERASE_SECTOR_COMMAND;
-	command[1] = sector & 0xFF;
-	command[2] = 0;
-	command[3] = 0;
-	command[4] = 0;
-
-	res = stlink_dfu_download(info, command, sizeof(command), 0);
-
-	return res;
+	uint8_t command[5] = {
+		ERASE_SECTOR_COMMAND,
+		sector & 0xffU,
+	};
+	return stlink_dfu_download(info, command, sizeof(command), 0);
 }
 
-int stlink_set_address(struct STLinkInfo *info, uint32_t address)
+int stlink_set_address(stlink_info_s *const info, const uint32_t address)
 {
-	unsigned char set_address_command[5];
-	int res;
-
-	set_address_command[0] = SET_ADDRESS_POINTER_COMMAND;
-	set_address_command[1] = address & 0xFF;
-	set_address_command[2] = (address >> 8) & 0xFF;
-	set_address_command[3] = (address >> 16) & 0xFF;
-	set_address_command[4] = (address >> 24) & 0xFF;
-
-	res = stlink_dfu_download(info, set_address_command, sizeof(set_address_command), 0);
-	return res;
+	uint8_t set_address_command[5] = {
+		SET_ADDRESS_POINTER_COMMAND,
+		address & 0xffU,
+		(address >> 8) & 0xffU,
+		(address >> 16) & 0xffU,
+		(address >> 24) & 0xffU,
+	};
+	return stlink_dfu_download(info, set_address_command, sizeof(set_address_command), 0);
 }
 
-int stlink_flash(struct STLinkInfo *info, const char *filename)
+int stlink_flash(stlink_info_s *info, const char *filename)
 {
 	unsigned int file_size;
 	int fd, res;
@@ -447,17 +431,16 @@ int stlink_flash(struct STLinkInfo *info, const char *filename)
 	return 0;
 }
 
-int stlink_exit_dfu(struct STLinkInfo *info)
+int stlink_exit_dfu(stlink_info_s *const info)
 {
-	unsigned char data[16];
-	int rw_bytes, res;
+	uint8_t data[16] = {
+		ST_DFU_MAGIC,
+		DFU_EXIT,
+	};
 
-	memset(data, 0, sizeof(data));
-
-	data[0] = ST_DFU_MAGIC;
-	data[1] = DFU_EXIT;
-
-	res = libusb_bulk_transfer(info->stinfo_dev_handle, info->stinfo_ep_out, data, 16, &rw_bytes, USB_TIMEOUT);
+	int rw_bytes = 0;
+	const int res =
+		libusb_bulk_transfer(info->stinfo_dev_handle, info->stinfo_ep_out, data, 16, &rw_bytes, USB_TIMEOUT);
 	if (res || rw_bytes != 16) {
 		fprintf(stderr, "USB transfer failure\n");
 		return -1;
