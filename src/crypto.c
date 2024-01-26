@@ -21,10 +21,6 @@
  * OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include <stdlib.h>
-#include <string.h>
-#include <arpa/inet.h>
-
 #include "../tiny-AES-c/aes.h"
 #include "crypto.h"
 #include "buffer_utils.h"
