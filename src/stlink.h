@@ -1,5 +1,7 @@
 /*
  * Copyright (c) 2018 Jean THOMAS.
+ * Copyright (c) 2024 1BitSquared <info@1bitsquared.com>
+ * Modified by Rachel Mant <git@dragonmux.network>
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the "Software"),
