@@ -27,9 +27,15 @@
 #include <fcntl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#ifdef _WIN32
+#define WIN32_MEAN_AND_LEAN
+#define NOMINMAX
+#include <windows.h>
+#else
 #include <sys/mman.h>
 #include <unistd.h>
 #define O_BINARY O_NOCTTY
+#endif
 #include <string.h>
 #include <errno.h>
 #include <libusb.h>
@@ -359,12 +365,30 @@ int stlink_flash(stlink_info_s *info, const char *filename)
 	}
 	const size_t file_size = (size_t)file_stat.st_size;
 
+#ifdef _WIN32
+	HANDLE file_handle = _get_osfhandle(fd);
+	HANDLE mapping =
+		CreateFileMappingA(file_handle, NULL, PAGE_READONLY, file_size >> 32U, file_size & UINT32_MAX, NULL);
+	if (mapping == INVALID_HANDLE_VALUE) {
+		DWORD error = GetLastError();
+		fprintf(stderr, "Failed to memory map firmware (%lu)\n", error);
+		return -1;
+	}
+
+	const uint8_t *const firmware = (const uint8_t *)MapViewOfFile(mapping, FILE_MAP_READ, 0U, 0U, 0U);
+	if (firmware == NULL) {
+		DWORD error = GetLastError();
+		fprintf(stderr, "Failed to memory map firmware (%lu)\n", error);
+		return -1;
+	}
+#else
 	const uint8_t *const firmware = (const uint8_t *)mmap(NULL, file_size, PROT_READ, MAP_PRIVATE, fd, 0);
 	if (firmware == MAP_FAILED) {
 		const int error = errno;
 		fprintf(stderr, "Failed to memory map firmware (%d): %s\n", error, strerror(error));
 		return -1;
 	}
+#endif
 
 	printf("Type %s\n", info->stinfo_bl_type == STLINK_BL_V3 ? "V3" : "V2");
 	uint32_t base_offset = info->stinfo_bl_type == STLINK_BL_V3 ? 0x08020000U : 0x08004000U;
@@ -425,7 +449,12 @@ int stlink_flash(stlink_info_s *info, const char *filename)
 		fflush(stdout); /* Flush stdout buffer */
 	}
 
+#ifdef _WIN32
+	UnmapViewOfFile(firmware);
+	CloseHandle(mapping);
+#else
 	munmap((void *)firmware, file_size);
+#endif
 	close(fd);
 
 	printf("\n");
