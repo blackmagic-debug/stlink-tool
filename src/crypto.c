@@ -27,33 +27,28 @@
 
 #include "../tiny-AES-c/aes.h"
 #include "crypto.h"
-
-static void convert_to_big_endian(unsigned char *array, unsigned int length);
-
-static void convert_to_big_endian(unsigned char *array, unsigned int length)
-{
-	unsigned int i;
-
-	for (i = 0; i < length; i += 4) {
-		*(uint32_t *)(array + i) = htonl(*(uint32_t *)(array + i));
-	}
-}
+#include "buffer_utils.h"
 
 void stlink_aes(const void *const key, uint8_t *const data, const size_t length)
 {
+	uint8_t key_be[16U] = {0};
+	/* Read the key (as 4-byte little endian) and write it to our internal buffer as 4-byte big endian */
+	for (size_t offset = 0U; offset < 16U; offset += 4U)
+		write_be4(key_be, offset, read_le4(key, offset));
+
+	/* Initialise the cryptography subsystem */
 	struct AES_ctx ctx;
-	unsigned char key_be[16];
-	size_t i;
-
-	memcpy(key_be, key, 16);
-	convert_to_big_endian(key_be, 16);
-
 	AES_init_ctx(&ctx, key_be);
 
-	convert_to_big_endian(data, length);
-
-	for (i = 0; i < length; i += 16) {
-		AES_ECB_encrypt(&ctx, data + i);
+	/* Iterate through the data, 1 AES block size at a time */
+	for (size_t block_offset = 0U; block_offset < length; block_offset += 16U) {
+		/* Convert the input data chunk from 4-byte LE to 4-byte BE */
+		for (size_t offset = 0; offset < length; offset += 4U)
+			write_be4(data, block_offset + offset, read_le4(data, block_offset + offset));
+		/* Run the operation (due to a bug in ST's impl, it's encrypt both ways) */
+		AES_ECB_encrypt(&ctx, data + block_offset);
+		/* Convert the buffer back */
+		for (size_t offset = 0; offset < length; offset += 4U)
+			write_le4(data, block_offset + offset, read_be4(data, block_offset + offset));
 	}
-	convert_to_big_endian(data, length);
 }
