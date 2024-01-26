@@ -29,7 +29,9 @@
 #include <sys/stat.h>
 #include <sys/mman.h>
 #include <unistd.h>
+#define O_BINARY O_NOCTTY
 #include <string.h>
+#include <errno.h>
 #include <libusb.h>
 
 #include "crypto.h"
@@ -342,47 +344,50 @@ int stlink_set_address(stlink_info_s *const info, const uint32_t address)
 
 int stlink_flash(stlink_info_s *info, const char *filename)
 {
-	unsigned int file_size;
-	int fd, res;
-	struct stat firmware_stat;
-	unsigned char *firmware;
-
-	fd = open(filename, O_RDONLY);
+	const int fd = open(filename, O_RDONLY | O_BINARY);
 	if (fd == -1) {
-		fprintf(stderr, "File opening failed\n");
+		const int error = errno;
+		fprintf(stderr, "Opening file failed (%d): %s\n", error, strerror(error));
 		return -1;
 	}
 
-	fstat(fd, &firmware_stat);
-
-	file_size = firmware_stat.st_size;
-	if (!file_size)
+	struct stat file_stat;
+	if (!fstat(fd, &file_stat) || file_stat.st_size <= 0) {
+		const int error = errno;
+		fprintf(stderr, "Failed to get firmware file length (%d): %s\n", error, strerror(error));
 		return -1;
+	}
+	const size_t file_size = (size_t)file_stat.st_size;
 
-	firmware = mmap(NULL, file_size, PROT_WRITE, MAP_PRIVATE, fd, 0);
+	const uint8_t *const firmware = (const uint8_t *)mmap(NULL, file_size, PROT_READ, MAP_PRIVATE, fd, 0);
 	if (firmware == MAP_FAILED) {
-		fprintf(stderr, "mmap failure\n");
+		const int error = errno;
+		fprintf(stderr, "Failed to memory map firmware (%d): %s\n", error, strerror(error));
 		return -1;
 	}
 
-	printf("Type %s\n", (info->stinfo_bl_type == STLINK_BL_V3) ? "V3" : "V2");
-	unsigned int base_offset;
-	base_offset = (info->stinfo_bl_type == STLINK_BL_V3) ? 0x08020000 : 0x08004000;
-	int chunk_size = (1 << 10);
-	unsigned int flashed_bytes = 0;
-	while (flashed_bytes < file_size) {
-		unsigned int cur_chunk_size;
-		if ((flashed_bytes + chunk_size) > file_size) {
-			cur_chunk_size = file_size - flashed_bytes;
-		} else {
-			cur_chunk_size = chunk_size;
-		}
+	printf("Type %s\n", info->stinfo_bl_type == STLINK_BL_V3 ? "V3" : "V2");
+	uint32_t base_offset = info->stinfo_bl_type == STLINK_BL_V3 ? 0x08020000U : 0x08004000U;
+	const size_t chunk_size = 1U << 10U;
+	size_t amount = chunk_size;
+	for (size_t flashed_bytes = 0; flashed_bytes < file_size; flashed_bytes += amount) {
+		if (flashed_bytes + chunk_size > file_size)
+			amount = file_size - flashed_bytes;
+
 		int wdl = 2;
 		if (info->stinfo_bl_type == STLINK_BL_V3) {
 			uint32_t address = base_offset + flashed_bytes;
-			uint32_t sector_start[8] = {
-				0x08000000, 0x08004000, 0x08008000, 0x0800C000, 0x08010000, 0x08020000, 0x08040000, 0x08060000};
-			int sector = -1;
+			static const uint32_t sector_start[8] = {
+				0x08000000U,
+				0x08004000U,
+				0x08008000U,
+				0x0800C000U,
+				0x08010000U,
+				0x08020000U,
+				0x08040000U,
+				0x08060000U,
+			};
+			size_t sector = SIZE_MAX;
 			size_t i;
 			for (i = 0; i < 8; i++) {
 				if (sector_start[i] == address) {
@@ -391,42 +396,39 @@ int stlink_flash(stlink_info_s *info, const char *filename)
 				}
 			}
 			if (i < 8) {
-				res = stlink_sector_erase(info, sector);
+				const int res = stlink_sector_erase(info, sector);
 				if (res) {
-					fprintf(stderr, "Erase sector %d failed\n", sector);
+					fprintf(stderr, "Erase sector %zu failed\n", sector);
 					return res;
 				}
-				printf("Erase sector %d done\n", sector);
+				printf("Erase sector %zu done\n", sector);
 			}
 		} else {
-			res = stlink_erase(info, base_offset + flashed_bytes);
+			const int res = stlink_erase(info, base_offset + flashed_bytes);
 			if (res) {
-				fprintf(stderr, "Erase error at 0x%08x\n", base_offset + flashed_bytes);
+				fprintf(stderr, "Erase error at 0x%08zx\n", base_offset + flashed_bytes);
 				return res;
 			}
 		}
-		res = stlink_set_address(info, base_offset + flashed_bytes);
+		int res = stlink_set_address(info, base_offset + flashed_bytes);
 		if (res) {
-			fprintf(stderr, "set address error at 0x%08x\n", base_offset + flashed_bytes);
+			fprintf(stderr, "set address error at 0x%08zx\n", base_offset + flashed_bytes);
 			return res;
 		}
-		res = stlink_dfu_download(info, firmware + flashed_bytes, chunk_size, wdl);
+		res = stlink_dfu_download(info, (uint8_t *)firmware + flashed_bytes, chunk_size, wdl);
 		if (res) {
-			fprintf(stderr, "Download error at 0x%08x\n", base_offset + flashed_bytes);
+			fprintf(stderr, "Download error at 0x%08zx\n", base_offset + flashed_bytes);
 			return res;
 		}
 
 		printf(".");
 		fflush(stdout); /* Flush stdout buffer */
-
-		flashed_bytes += cur_chunk_size;
 	}
 
-	munmap(firmware, file_size);
+	munmap((void *)firmware, file_size);
 	close(fd);
 
 	printf("\n");
-
 	return 0;
 }
 
