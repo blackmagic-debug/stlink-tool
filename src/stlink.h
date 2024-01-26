@@ -78,9 +78,9 @@ typedef struct dfu_status {
 	uint32_t bwPollTimeout;
 } dfu_status_s;
 
-uint16_t stlink_dfu_mode(libusb_device_handle *dev_handle, int trigger);
-int stlink_read_info(stlink_info_s *info);
+uint16_t stlink_dfu_mode(libusb_device_handle *dev_handle, bool trigger);
+bool stlink_read_info(stlink_info_s *info);
 uint16_t stlink_current_mode(stlink_info_s *info);
 int stlink_dfu_download(stlink_info_s *stlink_info, uint8_t *data, size_t data_len, uint16_t wBlockNum);
 int stlink_flash(stlink_info_s *stlink_info, const char *filename);
-int stlink_exit_dfu(stlink_info_s *info);
+bool stlink_exit_dfu(stlink_info_s *info);

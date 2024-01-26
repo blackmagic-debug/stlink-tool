@@ -156,12 +156,12 @@ rescan:
 					"may communicate with an ST-Link dongle.\n");
 				continue;
 			}
-			res = stlink_dfu_mode(info.stinfo_dev_handle, 0);
-			if (res != 0x8000) {
+			const uint16_t mode = stlink_dfu_mode(info.stinfo_dev_handle, false);
+			if (mode != 0x8000U) {
 				libusb_release_interface(info.stinfo_dev_handle, 0);
 				return 0;
 			}
-			stlink_dfu_mode(info.stinfo_dev_handle, 1);
+			stlink_dfu_mode(info.stinfo_dev_handle, true);
 			libusb_release_interface(info.stinfo_dev_handle, 0);
 			libusb_free_device_list(devs, n_devs);
 			usleep(2000000);
@@ -186,7 +186,7 @@ rescan:
 		return EXIT_FAILURE;
 	}
 
-	if (stlink_read_info(&info)) {
+	if (!stlink_read_info(&info)) {
 		libusb_release_interface(info.stinfo_dev_handle, 0);
 		return EXIT_FAILURE;
 	}
@@ -206,14 +206,14 @@ rescan:
 	}
 	printf("\n");
 
-	res = stlink_current_mode(&info);
-	if (res < 0) {
+	const uint16_t mode = stlink_current_mode(&info);
+	if (mode == UINT16_MAX) {
 		libusb_release_interface(info.stinfo_dev_handle, 0);
 		return EXIT_FAILURE;
 	}
-	printf("Current mode : %d\n", res);
+	printf("Current mode : %u\n", mode);
 
-	if (res & 0xfffc) {
+	if (mode & ~3U) {
 		printf("ST-Link dongle is not in the correct mode. Please unplug and plug the dongle again.\n");
 		libusb_release_interface(info.stinfo_dev_handle, 0);
 		return EXIT_SUCCESS;

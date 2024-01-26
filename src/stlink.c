@@ -88,7 +88,7 @@ static inline uint32_t read_le4(const uint8_t *const buffer, const size_t offset
 		((uint32_t)buffer[offset + 3U] << 24U);
 }
 
-uint16_t stlink_dfu_mode(libusb_device_handle *dev_handle, int trigger)
+uint16_t stlink_dfu_mode(libusb_device_handle *const dev_handle, const bool trigger)
 {
 	uint8_t data[16] = {0xf9U};
 	if (trigger)
@@ -112,11 +112,11 @@ uint16_t stlink_dfu_mode(libusb_device_handle *dev_handle, int trigger)
 	return read_be2(data, 0);
 }
 
-int stlink_read_info(stlink_info_s *info)
+bool stlink_read_info(stlink_info_s *info)
 {
 	uint8_t data[20] = {
 		ST_DFU_INFO,
-		0x80,
+		0x80U,
 	};
 
 	int rw_bytes = 0;
@@ -124,14 +124,14 @@ int stlink_read_info(stlink_info_s *info)
 	int res = libusb_bulk_transfer(info->stinfo_dev_handle, info->stinfo_ep_out, data, 16, &rw_bytes, USB_TIMEOUT);
 	if (res) {
 		fprintf(stderr, "stlink_read_info out transfer failure\n");
-		return -1;
+		return false;
 	}
 
 	/* Read */
 	res = libusb_bulk_transfer(info->stinfo_dev_handle, info->stinfo_ep_in, data, 6, &rw_bytes, USB_TIMEOUT);
 	if (res) {
 		fprintf(stderr, "stlink_read_info in transfer failure\n");
-		return -1;
+		return false;
 	}
 
 	info->stlink_version = data[0] >> 4;
@@ -146,21 +146,21 @@ int stlink_read_info(stlink_info_s *info)
 
 		memset(data, 0, sizeof(data));
 
-		data[0] = 0xFB;
-		data[1] = 0x80;
+		data[0] = 0xfbU;
+		data[1] = 0x80U;
 
 		/* Write */
 		res = libusb_bulk_transfer(info->stinfo_dev_handle, info->stinfo_ep_out, data, 16, &rw_bytes, USB_TIMEOUT);
 		if (res) {
 			fprintf(stderr, "USB transfer failure\n");
-			return -1;
+			return false;
 		}
 
 		/* Read */
 		res = libusb_bulk_transfer(info->stinfo_dev_handle, info->stinfo_ep_in, data, 12, &rw_bytes, USB_TIMEOUT);
 		if (res) {
 			fprintf(stderr, "USB transfer failure\n");
-			return -1;
+			return false;
 		}
 
 		info->jtag_version = data[2];
@@ -171,20 +171,20 @@ int stlink_read_info(stlink_info_s *info)
 	memset(data, 0, sizeof(data));
 
 	data[0] = ST_DFU_MAGIC;
-	data[1] = 0x08;
+	data[1] = 0x08U;
 
 	/* Write */
 	res = libusb_bulk_transfer(info->stinfo_dev_handle, info->stinfo_ep_out, data, 16, &rw_bytes, USB_TIMEOUT);
 	if (res) {
 		fprintf(stderr, "USB transfer failure\n");
-		return -1;
+		return false;
 	}
 
 	/* Read */
 	libusb_bulk_transfer(info->stinfo_dev_handle, info->stinfo_ep_in, data, 20, &rw_bytes, USB_TIMEOUT);
 	if (res) {
 		fprintf(stderr, "USB transfer failure\n");
-		return -1;
+		return false;
 	}
 
 	memcpy(info->id, data + 8, 12);
@@ -196,7 +196,7 @@ int stlink_read_info(stlink_info_s *info)
 		my_encrypt((unsigned char *)"I am key, wawawa", info->firmware_key, 16);
 	else
 		my_encrypt((unsigned char *)" found...STlink ", info->firmware_key, 16);
-	return 0;
+	return true;
 }
 
 uint16_t stlink_current_mode(stlink_info_s *info)
@@ -209,14 +209,14 @@ uint16_t stlink_current_mode(stlink_info_s *info)
 		libusb_bulk_transfer(info->stinfo_dev_handle, info->stinfo_ep_out, data, sizeof(data), &rw_bytes, USB_TIMEOUT);
 	if (res) {
 		fprintf(stderr, "USB transfer failure\n");
-		return -1;
+		return UINT16_MAX;
 	}
 
 	/* Read */
 	res = libusb_bulk_transfer(info->stinfo_dev_handle, info->stinfo_ep_in, data, 2, &rw_bytes, USB_TIMEOUT);
 	if (res) {
 		fprintf(stderr, "stlink_read_info() failure\n");
-		return -1;
+		return UINT16_MAX;
 	}
 
 	return read_be2(data, 0);
@@ -278,20 +278,16 @@ int stlink_dfu_download(stlink_info_s *info, unsigned char *data, const size_t d
 	if (!stlink_dfu_status(info, &dfu_status))
 		return -1;
 
-	if (dfu_status.bState != dfuDNLOAD_IDLE) {
-		if (dfu_status.bStatus == errVENDOR) {
-			fprintf(stderr, "Read-only protection active\n");
-			return -3;
-		} else if (dfu_status.bStatus == errTARGET) {
-			fprintf(stderr, "Invalid address error\n");
-			return -3;
-		} else {
-			fprintf(stderr, "Unknown error : %d\n", dfu_status.bStatus);
-			return -3;
-		}
-	}
+	if (dfu_status.bState == dfuDNLOAD_IDLE)
+		return 0;
 
-	return 0;
+	if (dfu_status.bStatus == errVENDOR)
+		fprintf(stderr, "Read-only protection active\n");
+	else if (dfu_status.bStatus == errTARGET)
+		fprintf(stderr, "Invalid address error\n");
+	else
+		fprintf(stderr, "Unknown error : %d\n", dfu_status.bStatus);
+	return -3;
 }
 
 bool stlink_dfu_status(stlink_info_s *const info, dfu_status_s *const status)
@@ -434,7 +430,7 @@ int stlink_flash(stlink_info_s *info, const char *filename)
 	return 0;
 }
 
-int stlink_exit_dfu(stlink_info_s *const info)
+bool stlink_exit_dfu(stlink_info_s *const info)
 {
 	uint8_t data[16] = {
 		ST_DFU_MAGIC,
@@ -446,7 +442,7 @@ int stlink_exit_dfu(stlink_info_s *const info)
 		libusb_bulk_transfer(info->stinfo_dev_handle, info->stinfo_ep_out, data, 16, &rw_bytes, USB_TIMEOUT);
 	if (res || rw_bytes != 16) {
 		fprintf(stderr, "USB transfer failure\n");
-		return -1;
+		return false;
 	}
-	return 0;
+	return true;
 }
