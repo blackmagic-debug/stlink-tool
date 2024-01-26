@@ -21,6 +21,9 @@
  * OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
+#ifndef STLINK_H
+#define STLINK_H
+
 enum DeviceStatus {
 	OK = 0x00,
 	errTARGET = 0x01,
@@ -86,3 +89,5 @@ uint16_t stlink_current_mode(stlink_info_s *info);
 int stlink_dfu_download(stlink_info_s *stlink_info, uint8_t *data, size_t data_len, uint16_t wBlockNum);
 int stlink_flash(stlink_info_s *stlink_info, const char *filename);
 bool stlink_exit_dfu(stlink_info_s *info);
+
+#endif /*STLINK_H*/
