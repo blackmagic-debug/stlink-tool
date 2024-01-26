@@ -54,13 +54,13 @@ void print_help(char *argv[])
 
 int main(int argc, char **argv)
 {
-	stlink_info_s info;
-	int res = EXIT_FAILURE, i, opt, probe = 0;
+	int opt = -1;
+	bool probe = false;
 
 	while ((opt = getopt(argc, argv, "hp")) != -1) {
 		switch (opt) {
 		case 'p': /* Probe mode */
-			probe = 1;
+			probe = true;
 			break;
 		case 'h': /* Help */
 			print_help(argv);
@@ -75,7 +75,8 @@ int main(int argc, char **argv)
 
 	const bool do_load = optind < argc;
 
-	res = libusb_init(&info.stinfo_usb_ctx);
+	stlink_info_s info;
+	int res = libusb_init(&info.stinfo_usb_ctx);
 rescan:
 	info.stinfo_dev_handle = NULL;
 	libusb_device **devs;
@@ -83,7 +84,7 @@ rescan:
 	if (n_devs < 0)
 		goto exit_libusb;
 
-	for (int i = 0; devs[i]; i++) {
+	for (size_t i = 0U; devs[i]; i++) {
 		libusb_device *dev = devs[i];
 		struct libusb_device_descriptor desc;
 		int res = libusb_get_device_descriptor(dev, &desc);
@@ -193,17 +194,12 @@ rescan:
 	printf("Firmware version : V%dJ%dS%d\n", info.stlink_version, info.jtag_version, info.swim_version);
 	printf("Loader version : %d\n", info.loader_version);
 	printf("ST-Link ID : ");
-	for (i = 0; i < 12; i += 4) {
-		printf("%02X", info.id[i + 3]);
-		printf("%02X", info.id[i + 2]);
-		printf("%02X", info.id[i + 1]);
-		printf("%02X", info.id[i + 0]);
-	}
+	for (size_t i = 0; i < 12U; i += 4U)
+		printf("%02X%02X%02X%02X", info.id[i + 3U], info.id[i + 2U], info.id[i + 1U], info.id[i + 0U]);
 	printf("\n");
 	printf("Firmware encryption key : ");
-	for (i = 0; i < 16; i++) {
+	for (size_t i = 0U; i < 16U; ++i)
 		printf("%02X", info.firmware_key[i]);
-	}
 	printf("\n");
 
 	const uint16_t mode = stlink_current_mode(&info);
