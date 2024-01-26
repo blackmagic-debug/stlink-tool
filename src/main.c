@@ -40,13 +40,16 @@
 
 #include "stlink.h"
 
-#define STLINK_VID        0x0483
-#define STLINK_PID        0x3748
-#define STLINK_PIDV21     0x374b
-#define STLINK_PIDV21_MSD 0x3752
-#define STLINK_PIDV3_MSD  0x374e
-#define STLINK_PIDV3      0x374f
-#define STLINK_PIDV3_BL   0x374d
+#define VENDOR_ID_STLINK           0x0483U
+#define PRODUCT_ID_STLINK_MASK     0xffe0U
+#define PRODUCT_ID_STLINK_GROUP    0x3740U
+#define PRODUCT_ID_STLINKV2        0x3748U
+#define PRODUCT_ID_STLINKV21       0x374bU
+#define PRODUCT_ID_STLINKV21_MSD   0x3752U
+#define PRODUCT_ID_STLINKV3_NO_MSD 0x3754U
+#define PRODUCT_ID_STLINKV3_BL     0x374dU
+#define PRODUCT_ID_STLINKV3        0x374fU
+#define PRODUCT_ID_STLINKV3E       0x374eU
 
 #define OPENMOKO_VID 0x1d50
 #define BMP_APPL_PID 0x6018
@@ -128,45 +131,45 @@ rescan:
 			goto rescan;
 			break;
 		}
-		if (desc.idVendor != STLINK_VID)
+		if (desc.idVendor != VENDOR_ID_STLINK || (desc.idProduct & PRODUCT_ID_STLINK_MASK) != PRODUCT_ID_STLINK_GROUP)
 			continue;
 		switch (desc.idProduct) {
-		case STLINK_PID:
+		case PRODUCT_ID_STLINKV2:
 			res = libusb_open(dev, &info.stinfo_dev_handle);
 			if (res < 0) {
-				fprintf(stderr, "Can not open STLINK/Bootloader!\n");
+				fprintf(stderr, "Can not open ST-Link v2/Bootloader!\n");
 				continue;
 			}
 			info.stinfo_ep_in = 1 | LIBUSB_ENDPOINT_IN;
 			info.stinfo_ep_out = 2 | LIBUSB_ENDPOINT_OUT;
 			info.stinfo_bl_type = STLINK_BL_V2;
-			fprintf(stderr, "StlinkV21 Bootloader found\n");
+			fprintf(stderr, "ST-Link v2/v2.1 Bootloader found\n");
 			break;
-		case STLINK_PIDV3_BL:
+		case PRODUCT_ID_STLINKV3_BL:
 			res = libusb_open(dev, &info.stinfo_dev_handle);
 			if (res < 0) {
-				fprintf(stderr, "Can not open STLINK-V3/Bootloader!\n");
+				fprintf(stderr, "Can not open ST-Link v3 Bootloader!\n");
 				continue;
 			}
 			info.stinfo_ep_in = 1 | LIBUSB_ENDPOINT_IN;
 			info.stinfo_ep_out = 1 | LIBUSB_ENDPOINT_OUT;
 			info.stinfo_bl_type = STLINK_BL_V3;
-			fprintf(stderr, "StlinkV3 Bootloader found\n");
+			fprintf(stderr, "ST-Link v3 Bootloader found\n");
 			break;
-		case STLINK_PIDV21:
-		case STLINK_PIDV21_MSD:
-		case STLINK_PIDV3_MSD:
-		case STLINK_PIDV3:
-			fprintf(stderr, "Trying to switch STLINK/Application to bootloader\n");
+		case PRODUCT_ID_STLINKV21:
+		case PRODUCT_ID_STLINKV21_MSD:
+		case PRODUCT_ID_STLINKV3:
+		case PRODUCT_ID_STLINKV3_NO_MSD:
+		case PRODUCT_ID_STLINKV3E:
+			fprintf(stderr, "Trying to switch ST-Link/Application to bootloader\n");
 			res = libusb_open(dev, &info.stinfo_dev_handle);
 			if (res < 0) {
-				fprintf(stderr, "Can not open STLINK/Application!\n");
+				fprintf(stderr, "Can not open ST-Link/Application!\n");
 				continue;
 			}
 			if (libusb_claim_interface(info.stinfo_dev_handle, 0)) {
 				fprintf(stderr,
-					"Unable to claim USB interface ! "
-					"Please close all programs that "
+					"Unable to claim USB interface. Please close all programs that "
 					"may communicate with an ST-Link dongle.\n");
 				continue;
 			}
