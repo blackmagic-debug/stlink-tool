@@ -19,11 +19,15 @@
  * OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
+#include <stdint.h>
+#include <stddef.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <libusb.h>
 #include <getopt.h>
+#include <string.h>
 
 #include "stlink.h"
 
@@ -48,9 +52,7 @@ void print_help(char *argv[])
 	printf("\tApplication is started when called without argument or after firmware load\n\n");
 }
 
-#include <string.h>
-
-int main(int argc, char *argv[])
+int main(int argc, char **argv)
 {
 	stlink_info_s info;
 	int res = EXIT_FAILURE, i, opt, probe = 0;
@@ -71,15 +73,16 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	int do_load = (optind < argc);
+	const bool do_load = optind < argc;
 
 	res = libusb_init(&info.stinfo_usb_ctx);
 rescan:
 	info.stinfo_dev_handle = NULL;
 	libusb_device **devs;
-	int n_devs = libusb_get_device_list(info.stinfo_usb_ctx, &devs);
+	ssize_t n_devs = libusb_get_device_list(info.stinfo_usb_ctx, &devs);
 	if (n_devs < 0)
 		goto exit_libusb;
+
 	for (int i = 0; devs[i]; i++) {
 		libusb_device *dev = devs[i];
 		struct libusb_device_descriptor desc;
@@ -106,7 +109,7 @@ rescan:
 				fprintf(stderr, "BMP Switch failed\n");
 				continue;
 			}
-			libusb_free_device_list(devs, 1);
+			libusb_free_device_list(devs, n_devs);
 			usleep(2000000);
 			goto rescan;
 			break;
@@ -160,7 +163,7 @@ rescan:
 			}
 			stlink_dfu_mode(info.stinfo_dev_handle, 1);
 			libusb_release_interface(info.stinfo_dev_handle, 0);
-			libusb_free_device_list(devs, 1);
+			libusb_free_device_list(devs, n_devs);
 			usleep(2000000);
 			goto rescan;
 			break;
@@ -170,7 +173,7 @@ rescan:
 		if (info.stinfo_dev_handle)
 			break;
 	}
-	libusb_free_device_list(devs, 1);
+	libusb_free_device_list(devs, n_devs);
 	if (!info.stinfo_dev_handle) {
 		fprintf(stderr, "No ST-Link in DFU mode found. Replug ST-Link to flash!\n");
 		return EXIT_FAILURE;
