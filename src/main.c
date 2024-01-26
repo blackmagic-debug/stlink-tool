@@ -76,7 +76,11 @@ int main(int argc, char **argv)
 	const bool do_load = optind < argc;
 
 	stlink_info_s info;
-	int res = libusb_init(&info.stinfo_usb_ctx);
+	const int res = libusb_init(&info.stinfo_usb_ctx);
+	if (res != LIBUSB_SUCCESS) {
+		fprintf(stderr, "Failed to initialise libusb: %d (%s)\n", res, libusb_strerror(res));
+		return 2;
+	}
 rescan:
 	info.stinfo_dev_handle = NULL;
 	libusb_device **devs;
