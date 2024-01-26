@@ -32,6 +32,7 @@
 #define WIN32_MEAN_AND_LEAN
 #include <io.h>
 #include <windows.h>
+#define usleep Sleep
 #else
 #include <sys/mman.h>
 #include <unistd.h>

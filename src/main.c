@@ -24,7 +24,14 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#ifdef _WIN32
+#define NOMINMAX
+#define WIN32_MEAN_AND_LEAN
+#include <windows.h>
+#define usleep Sleep
+#else
 #include <unistd.h>
+#endif
 #include <libusb.h>
 #include <getopt.h>
 #include <string.h>
