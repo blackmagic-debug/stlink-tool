@@ -333,7 +333,7 @@ int stlink_flash(stlink_info_s *info, const char *filename)
 	}
 
 	struct stat file_stat;
-	if (!fstat(fd, &file_stat) || file_stat.st_size <= 0) {
+	if (fstat(fd, &file_stat) < 0 || file_stat.st_size <= 0) {
 		const int error = errno;
 		fprintf(stderr, "Failed to get firmware file length (%d): %s\n", error, strerror(error));
 		return -1;
@@ -368,12 +368,12 @@ int stlink_flash(stlink_info_s *info, const char *filename)
 	printf("Type %s\n", info->stinfo_bl_type == STLINK_BL_V3 ? "V3" : "V2");
 	uint32_t base_offset = info->stinfo_bl_type == STLINK_BL_V3 ? 0x08020000U : 0x08004000U;
 	const size_t chunk_size = 1U << 10U;
+	uint8_t chunk_buffer[1024U];
 	size_t amount = chunk_size;
 	for (size_t flashed_bytes = 0; flashed_bytes < file_size; flashed_bytes += amount) {
 		if (flashed_bytes + chunk_size > file_size)
 			amount = file_size - flashed_bytes;
 
-		int wdl = 2;
 		if (info->stinfo_bl_type == STLINK_BL_V3) {
 			uint32_t address = base_offset + flashed_bytes;
 			static const uint32_t sector_start[8] = {
@@ -414,7 +414,8 @@ int stlink_flash(stlink_info_s *info, const char *filename)
 			fprintf(stderr, "set address error at 0x%08zx\n", base_offset + flashed_bytes);
 			return res;
 		}
-		res = stlink_dfu_download(info, (uint8_t *)firmware + flashed_bytes, chunk_size, wdl);
+		memcpy(chunk_buffer, firmware + flashed_bytes, chunk_size);
+		res = stlink_dfu_download(info, chunk_buffer, chunk_size, 2U);
 		if (res) {
 			fprintf(stderr, "Download error at 0x%08zx\n", base_offset + flashed_bytes);
 			return res;
