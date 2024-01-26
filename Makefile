@@ -19,7 +19,7 @@
 # TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE
 # OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-CFLAGS := -std=c11 -Wall -Wextra -Werror $(shell pkg-config --cflags libusb-1.0) -g -Og
+CFLAGS := -std=c11 -Wall -Wextra -Werror $(shell pkg-config --cflags libusb-1.0) -g -Og -D_DEFAULT_SOURCE
 LDFLAGS := $(shell pkg-config --libs libusb-1.0)
 
 ifeq ($(ASAN), 1)
