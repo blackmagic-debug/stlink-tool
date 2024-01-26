@@ -77,24 +77,26 @@ static inline uint16_t read_le2(const uint8_t *const buffer, const size_t offset
 	return buffer[offset + 0U] | ((uint16_t)buffer[offset + 1U] << 8U);
 }
 
+static inline uint16_t read_be2(const uint8_t *const buffer, const size_t offset)
+{
+	return ((uint16_t)buffer[offset + 0U] << 8U) | buffer[offset + 1U];
+}
+
 static inline uint32_t read_le4(const uint8_t *const buffer, const size_t offset)
 {
 	return buffer[offset + 0U] | ((uint32_t)buffer[offset + 1U] << 8U) | ((uint32_t)buffer[offset + 2U] << 16U) |
 		((uint32_t)buffer[offset + 3U] << 24U);
 }
 
-int stlink_dfu_mode(libusb_device_handle *dev_handle, int trigger)
+uint16_t stlink_dfu_mode(libusb_device_handle *dev_handle, int trigger)
 {
-	unsigned char data[16];
-	int rw_bytes, res;
-
-	memset(data, 0, sizeof(data));
-
-	data[0] = 0xF9;
+	uint8_t data[16] = {0xf9U};
 	if (trigger)
 		data[1] = DFU_DNLOAD;
+
+	int rw_bytes = 0;
 	/* Write */
-	res = libusb_bulk_transfer(dev_handle, 1 | LIBUSB_ENDPOINT_OUT, data, sizeof(data), &rw_bytes, USB_TIMEOUT);
+	int res = libusb_bulk_transfer(dev_handle, 1 | LIBUSB_ENDPOINT_OUT, data, sizeof(data), &rw_bytes, USB_TIMEOUT);
 	if (res) {
 		fprintf(stderr, "USB transfer failure\n");
 		return -1;
@@ -107,21 +109,19 @@ int stlink_dfu_mode(libusb_device_handle *dev_handle, int trigger)
 			return -1;
 		}
 	}
-	return data[0] << 8 | data[1];
+	return read_be2(data, 0);
 }
 
 int stlink_read_info(stlink_info_s *info)
 {
-	unsigned char data[20];
-	int res, rw_bytes;
+	uint8_t data[20] = {
+		ST_DFU_INFO,
+		0x80,
+	};
 
-	memset(data, 0, sizeof(data));
-
-	data[0] = ST_DFU_INFO;
-	data[1] = 0x80;
-
+	int rw_bytes = 0;
 	/* Write */
-	res = libusb_bulk_transfer(info->stinfo_dev_handle, info->stinfo_ep_out, data, 16, &rw_bytes, USB_TIMEOUT);
+	int res = libusb_bulk_transfer(info->stinfo_dev_handle, info->stinfo_ep_out, data, 16, &rw_bytes, USB_TIMEOUT);
 	if (res) {
 		fprintf(stderr, "stlink_read_info out transfer failure\n");
 		return -1;
@@ -139,7 +139,7 @@ int stlink_read_info(stlink_info_s *info)
 	if (info->stlink_version < 3) {
 		info->jtag_version = (data[0] & 0x0F) << 2 | (data[1] & 0xC0) >> 6;
 		info->swim_version = data[1] & 0x3F;
-		info->loader_version = data[5] << 8 | data[4];
+		info->loader_version = read_le2(data, 4);
 
 	} else {
 		//info->product_id = data[3] << 8 | data[2];
@@ -165,7 +165,7 @@ int stlink_read_info(stlink_info_s *info)
 
 		info->jtag_version = data[2];
 		info->swim_version = data[1];
-		info->loader_version = data[11] << 8 | data[10];
+		info->loader_version = read_le2(data, 10);
 	}
 
 	memset(data, 0, sizeof(data));
@@ -192,25 +192,20 @@ int stlink_read_info(stlink_info_s *info)
 	/* Firmware encryption key generation */
 	memcpy(info->firmware_key, data, 4);
 	memcpy(info->firmware_key + 4, data + 8, 12);
-	if (info->stlink_version < 3) {
+	if (info->stlink_version < 3)
 		my_encrypt((unsigned char *)"I am key, wawawa", info->firmware_key, 16);
-	} else {
+	else
 		my_encrypt((unsigned char *)" found...STlink ", info->firmware_key, 16);
-	}
 	return 0;
 }
 
-int stlink_current_mode(stlink_info_s *info)
+uint16_t stlink_current_mode(stlink_info_s *info)
 {
-	unsigned char data[16];
-	int rw_bytes, res;
+	uint8_t data[16] = {0xf5U};
 
-	memset(data, 0, sizeof(data));
-
-	data[0] = 0xF5;
-
+	int rw_bytes = 0;
 	/* Write */
-	res =
+	int res =
 		libusb_bulk_transfer(info->stinfo_dev_handle, info->stinfo_ep_out, data, sizeof(data), &rw_bytes, USB_TIMEOUT);
 	if (res) {
 		fprintf(stderr, "USB transfer failure\n");
@@ -218,25 +213,21 @@ int stlink_current_mode(stlink_info_s *info)
 	}
 
 	/* Read */
-	libusb_bulk_transfer(info->stinfo_dev_handle, info->stinfo_ep_in, data, 2, &rw_bytes, USB_TIMEOUT);
+	res = libusb_bulk_transfer(info->stinfo_dev_handle, info->stinfo_ep_in, data, 2, &rw_bytes, USB_TIMEOUT);
 	if (res) {
 		fprintf(stderr, "stlink_read_info() failure\n");
 		return -1;
 	}
 
-	return data[0] << 8 | data[1];
+	return read_be2(data, 0);
 }
 
-uint16_t stlink_checksum(const unsigned char *firmware, size_t len)
+uint16_t stlink_checksum(const uint8_t *const firmware, const size_t len)
 {
-	unsigned int i;
-	int ret = 0;
-
-	for (i = 0; i < len; i++) {
-		ret += firmware[i];
-	}
-
-	return (uint16_t)ret & 0xFFFF;
+	uint16_t ret = 0;
+	for (size_t offset = 0; offset < len; ++offset)
+		ret += firmware[offset];
+	return ret;
 }
 
 int stlink_dfu_download(stlink_info_s *info, unsigned char *data, const size_t data_len, const uint16_t wBlockNum)
