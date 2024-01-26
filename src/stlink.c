@@ -370,7 +370,7 @@ int stlink_flash(stlink_info_s *info, const char *filename)
 	const size_t file_size = (size_t)file_stat.st_size;
 
 #ifdef _WIN32
-	HANDLE file_handle = _get_osfhandle(fd);
+	const HANDLE file_handle = (HANDLE)_get_osfhandle(fd);
 	HANDLE mapping =
 		CreateFileMappingA(file_handle, NULL, PAGE_READONLY, file_size >> 32U, file_size & UINT32_MAX, NULL);
 	if (mapping == INVALID_HANDLE_VALUE) {
