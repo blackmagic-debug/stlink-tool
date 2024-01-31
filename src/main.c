@@ -30,9 +30,10 @@
 #define NOMINMAX
 #define WIN32_MEAN_AND_LEAN
 #include <windows.h>
-#define usleep Sleep
+#define mssleep(ms) Sleep(ms)
 #else
 #include <unistd.h>
+#define mssleep(ms) usleep(ms * 1000U)
 #endif
 #include <libusb.h>
 #include <getopt.h>
@@ -127,7 +128,7 @@ rescan:
 				continue;
 			}
 			libusb_free_device_list(devs, n_devs);
-			usleep(2000000);
+			mssleep(2000);
 			goto rescan;
 			break;
 		}
@@ -181,7 +182,7 @@ rescan:
 			stlink_dfu_mode(info.stinfo_dev_handle, true);
 			libusb_release_interface(info.stinfo_dev_handle, 0);
 			libusb_free_device_list(devs, n_devs);
-			usleep(2000000);
+			mssleep(2000);
 			goto rescan;
 			break;
 		default:

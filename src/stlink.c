@@ -34,11 +34,12 @@
 #define WIN32_MEAN_AND_LEAN
 #include <io.h>
 #include <windows.h>
-#define usleep Sleep
+#define mssleep(ms) Sleep(ms)
 #else
 #include <sys/mman.h>
 #include <unistd.h>
 #define O_BINARY O_NOCTTY
+#define mssleep(ms) usleep(ms * 1000U)
 #endif
 #include <string.h>
 #include <errno.h>
@@ -256,7 +257,7 @@ int stlink_dfu_download(stlink_info_s *info, unsigned char *data, const size_t d
 		return -3;
 	}
 
-	usleep(dfu_status.bwPollTimeout * 1000);
+	mssleep(dfu_status.bwPollTimeout);
 
 	if (!stlink_dfu_status(info, &dfu_status))
 		return -1;
